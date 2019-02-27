@@ -901,7 +901,8 @@ namespace Tanneryd.BulkOperations.EF6
                 //
                 // Update the target table using the temp table we just created.
                 //
-                var setStatements = modifiedColumnMappings.Select(c => $"t0.[{c.TableColumn.Name}] = t1.[{c.TableColumn.Name}]");
+                var setStatements = modifiedColumnMappings.Where(x => x.TableColumn.PrimitiveType.FullName != "SqlServer.rowversion")
+                                                          .Select(c => $"t0.[{c.TableColumn.Name}] = t1.[{c.TableColumn.Name}]");
                 var setStatementsSql = string.Join(" , ", setStatements);
                 var conditionStatements = selectedKeyMappings.Select(c => $"t0.[{c.TableColumn.Name}] = t1.[{c.TableColumn.Name}]");
                 var conditionStatementsSql = string.Join(" AND ", conditionStatements);
@@ -917,11 +918,12 @@ namespace Tanneryd.BulkOperations.EF6
                 {
                     var columns = columnMappings.Values
                         .Where(m => !primaryKeyMembers.Contains(m.TableColumn.Name))
+                        .Where(m => m.TableColumn.PrimitiveType.FullName != "SqlServer.rowversion")
                         .Select(m => m.TableColumn.Name)
                         .ToArray();
                     var columnNames = string.Join(",", columns.Select(c => $"[{c}]"));
                     var t0ColumnNames = string.Join(",", columns.Select(c => $"[t0].[{c}]"));
-                    cmdBody = $@"INSERT INTO {tableName.Fullname}
+                    cmdBody = $@"INSERT INTO {tableName.Fullname} ({columnNames})
                              SELECT {columnNames}
                              FROM {tempTableName}
                              EXCEPT
@@ -1670,6 +1672,7 @@ namespace Tanneryd.BulkOperations.EF6
                 var nonPrimaryKeyColumnMappings = columnMappings
                     .Values
                     .Except(pkColumnMappings)
+                    .Where(x => x.TableColumn.PrimitiveType.FullName != "SqlServer.rowversion")
                     .ToArray();
                 var tempTableName = FillTempTable(conn, entities, tableName, columnMappings, pkColumnMappings, nonPrimaryKeyColumnMappings, transaction);
 
@@ -1683,7 +1686,8 @@ namespace Tanneryd.BulkOperations.EF6
                 string listOfPrimaryKeyColumns = string.Join(",",
                     pkColumnMappings.Select(c => $"[{c.TableColumn.Name}]"));
                 string listOfColumns = string.Join(",",
-                    pkColumnMappings.Concat(nonPrimaryKeyColumnMappings).Select(c => $"[{c.TableColumn.Name}]"));
+                    pkColumnMappings.Concat(nonPrimaryKeyColumnMappings).Where(x => x.TableColumn.PrimitiveType.FullName != "SqlServer.rowversion")
+                                                                        .Select(c => $"[{c.TableColumn.Name}]"));
 
                 cmdBody = $@"INSERT INTO {tableName.Fullname} ({listOfColumns})
                              SELECT {listOfColumns} 
